@@ -139,6 +139,11 @@
             }
         }
     </style>
+    <script src="https://unpkg.com/vconsole/dist/vconsole.min.js"></script>
+    <script>
+        var vConsole = new VConsole();
+        console.log('vConsole initialized');
+    </script>
     </head>
     <body>
         <div id="container"></div>
@@ -220,7 +225,7 @@
                     Stats.stop( 'slam' );
                     // 创建要发送的数据对象
                     const dataToSend = {
-                        timestamp: imu.timestamp,
+                        timestamp: imu.mill_timestamp,
                         imuData: imu.imuData,
                         KFimuData: imu.KFimuData,
                     };

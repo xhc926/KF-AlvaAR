@@ -102,42 +102,71 @@ class Quaternion
 
 class KalmanFilter {
     constructor() {
-        // 初始化状态向量 [q_x, q_y, q_z, q_w, omega_x, omega_y, omega_z, a_x, a_y, a_z]
         this.state = new Array(10).fill(0);
-        this.state[3] = 1; // 初始化四元数的 w 分量为 1（表示无旋转）
+        this.state[3] = 1; // 初始化四元数 w 分量为 1
 
-        // 初始化状态协方差矩阵
         this.covariance = Array.from({ length: 10 }, () => new Array(10).fill(0));
         for (let i = 0; i < 10; i++) {
-            this.covariance[i][i] = 1; // 初始协方差矩阵为单位矩阵
+            this.covariance[i][i] = 1;
         }
 
-        // 过程噪声协方差矩阵
-        this.processNoise = Array.from({ length: 10 }, () => new Array(10).fill(0));
-        for (let i = 0; i < 10; i++) {
-            this.processNoise[i][i] = 0.01; // 假设过程噪声较小
-        }
+        this.processNoise = this.getProcessNoiseMatrix(0.01);
+        this.observationNoise = this.getObservationNoiseMatrix();
 
-        // 观测噪声协方差矩阵
-        this.observationNoise = Array.from({ length: 10 }, () => new Array(10).fill(0));
-        for (let i = 0; i < 10; i++) {
-            this.observationNoise[i][i] = 0.1; // 假设观测噪声较大
-        }
-
-        // 状态转移矩阵（假设为单位矩阵）
         this.stateTransition = Array.from({ length: 10 }, () => new Array(10).fill(0));
+        this.observationMatrix = this.getObservationMatrix();
+    }
+    
+    getStateTransitionMatrix(dt) {
+        const F = Array.from({ length: 10 }, () => new Array(10).fill(0));
         for (let i = 0; i < 10; i++) {
-            this.stateTransition[i][i] = 1;
+            F[i][i] = 1;
         }
-
-        // 观测矩阵（假设为单位矩阵）
-        this.observationMatrix = Array.from({ length: 10 }, () => new Array(10).fill(0));
-        for (let i = 0; i < 10; i++) {
-            this.observationMatrix[i][i] = 1;
-        }
+        return F;
+    }
+    
+    getProcessNoiseMatrix(dt) {
+        const q = 0.01 * dt;
+        return Array.from({ length: 10 }, (_, i) => new Array(10).fill(0).map((_, j) => (i === j ? q : 0)));
     }
 
-    // 矩阵乘法
+    getObservationNoiseMatrix() {
+        return Array.from({ length: 10 }, (_, i) => new Array(10).fill(0).map((_, j) => (i === j ? 0.1 : 0)));
+    }
+
+    getObservationMatrix() {
+        return Array.from({ length: 10 }, (_, i) => new Array(10).fill(0).map((_, j) => (i === j ? 1 : 0)));
+    }
+
+    predict(dt) {
+        const F = this.getStateTransitionMatrix(dt);
+        this.state = this.multiplyMatrices(F, this.state.map(val => [val])).map(row => row[0]);
+
+        const FP = this.multiplyMatrices(F, this.covariance);
+        const FPF_T = this.multiplyMatrices(FP, this.transposeMatrix(F));
+        this.covariance = this.addMatrices(FPF_T, this.processNoise);
+    }
+
+    update(measurement) {
+        const H = this.observationMatrix;
+        const HP = this.multiplyMatrices(H, this.covariance);
+        const HPH_T = this.multiplyMatrices(HP, this.transposeMatrix(H));
+        const S = this.addMatrices(HPH_T, this.observationNoise);
+        const K = this.multiplyMatrices(
+            this.multiplyMatrices(this.covariance, this.transposeMatrix(H)),
+            this.invertMatrix(S)
+        );
+        console.log("S:", S);
+        console.log("K:", K);
+        const innovation = measurement.map((val, i) => val - this.state[i]);
+        const K_innovation = this.multiplyMatrices(K, innovation.map(val => [val]));
+        this.state = this.state.map((val, i) => val + K_innovation[i][0]);
+
+        const KH = this.multiplyMatrices(K, H);
+        const I_KH = this.covariance.map((row, i) => row.map((val, j) => i === j ? 1 - KH[i][j] : -KH[i][j]));
+        this.covariance = this.multiplyMatrices(I_KH, this.covariance);
+    }
+
     multiplyMatrices(a, b) {
         const result = Array.from({ length: a.length }, () => new Array(b[0].length).fill(0));
         for (let i = 0; i < a.length; i++) {
@@ -150,76 +179,16 @@ class KalmanFilter {
         return result;
     }
 
-    // 矩阵加法
     addMatrices(a, b) {
-        const result = Array.from({ length: a.length }, () => new Array(a[0].length).fill(0));
-        for (let i = 0; i < a.length; i++) {
-            for (let j = 0; j < a[0].length; j++) {
-                result[i][j] = a[i][j] + b[i][j];
-            }
-        }
-        return result;
+        return a.map((row, i) => row.map((val, j) => val + b[i][j]));
     }
 
-    // 矩阵转置
     transposeMatrix(matrix) {
         return matrix[0].map((_, i) => matrix.map(row => row[i]));
     }
 
-    // 矩阵求逆（简单实现，仅适用于对角矩阵）
     invertMatrix(matrix) {
-        const result = Array.from({ length: matrix.length }, () => new Array(matrix[0].length).fill(0));
-        for (let i = 0; i < matrix.length; i++) {
-            for (let j = 0; j < matrix[0].length; j++) {
-                result[i][j] = matrix[i][j] !== 0 ? 1 / matrix[i][j] : 0;
-            }
-        }
-        return result;
-    }
-
-    // 预测步骤
-    predict() {
-        // 将状态向量转换为列向量（二维数组）
-        const stateAsColumn = this.state.map(val => [val]);
-
-        // 预测状态：F * x
-        const predictedState = this.multiplyMatrices(this.stateTransition, stateAsColumn);
-        this.state = predictedState.map(row => row[0]); // 转换回一维数组
-
-        // 预测协方差：F * P * F^T + Q
-        const FP = this.multiplyMatrices(this.stateTransition, this.covariance);
-        const FPF_T = this.multiplyMatrices(FP, this.transposeMatrix(this.stateTransition));
-        this.covariance = this.addMatrices(FPF_T, this.processNoise);
-    }
-
-    // 更新步骤
-    update(measurement) {
-        // 将状态向量转换为列向量（二维数组）
-        const stateAsColumn = this.state.map(val => [val]);
-
-        // 计算卡尔曼增益：K = P * H^T * (H * P * H^T + R)^{-1}
-        const H = this.observationMatrix;
-        const HP = this.multiplyMatrices(H, this.covariance);
-        const HPH_T = this.multiplyMatrices(HP, this.transposeMatrix(H));
-        const S = this.addMatrices(HPH_T, this.observationNoise);
-        const K = this.multiplyMatrices(
-            this.multiplyMatrices(this.covariance, this.transposeMatrix(H)),
-            this.invertMatrix(S)
-        );
-
-        // 更新状态：x = x + K * (z - H * x)
-        const Hx = this.multiplyMatrices(H, stateAsColumn);
-        const innovation = measurement.map((val, i) => val - Hx[i][0]);
-        const K_innovation = this.multiplyMatrices(K, innovation.map(val => [val]));
-        this.state = this.state.map((val, i) => val + K_innovation[i][0]);
-
-        // 更新协方差：P = (I - K * H) * P
-        const I = Array.from({ length: 10 }, (_, i) => 
-            Array.from({ length: 10 }, (_, j) => i === j ? 1 : 0)
-        );
-        const KH = this.multiplyMatrices(K, H);
-        const I_KH = I.map((row, i) => row.map((val, j) => val - KH[i][j]));
-        this.covariance = this.multiplyMatrices(I_KH, this.covariance);
+        return matrix.map((row, i) => row.map((val, j) => (i === j && val !== 0 ? 1 / val : 0)));
     }
 }
 
@@ -283,30 +252,43 @@ class IMU
     constructor()
     {
         this.EPS = 0.000001;
-
         this.screenOrientation = null;
         this.screenOrientationAngle = 0;
-        this.timestamp = Date.now();
+        this.timestamps = [Date.now(), Date.now()];
+        this.mill_timestamp = Date.now();
+        this.position = [0, 0, 0]; // x, y, z
+        this.velocity = [0, 0, 0]; // vx, vy, vz
         this.q = { x: 0, y: 0, z: 0, w: 1 };
         this.X = this.Y = this.Z = 0;
         this.GX = this.GY = this.GZ = 0;
         this.AX = this.AY = this.AZ = 0;
-        this.accelerations = [0, 0, 0];
+        this.acceleration = [0, 0, 0];
+        this.angularVelocity = [0, 0, 0];
+        this.prevState = {
+            quaternion: [0, 0, 0, 1],
+            angularVelocity: [0, 0, 0],
+            acceleration: [0, 0, 0],
+            position: [0, 0, 0],
+            velocity: [0, 0, 0]
+        };
         this.orientation = { x: 1, y: 0, z: 0, w: 1 };
         this.worldTransform = isIOS()
             ? Quaternion.fromAxisAngle( 1, 0, 0, -Math.PI / 2 ) // -90 degrees on x-axis
             : Quaternion.fromAxisAngle(0, 1, 0, Math.PI / 2); // 90 degrees on y-axis
         // use kf
         this.imuData = {
-            quaternion: [0, 0, 0, 0], // 四元数 [q_x, q_y, q_z, q_w]
+            quaternion: [0, 0, 0, 1], // 四元数 [q_x, q_y, q_z, q_w]
             angularVelocity: [0, 0, 0], // 角速度 [omega_x, omega_y, omega_z]
             acceleration: [0, 0, 0] // 加速度 [a_x, a_y, a_z]
         };
         this.KFimuData = {
-            quaternion: [0, 0, 0, 0], // 四元数 [q_x, q_y, q_z, q_w]
+            quaternion: [0, 0, 0, 1], // 四元数 [q_x, q_y, q_z, q_w]
             angularVelocity: [0, 0, 0], // 角速度 [omega_x, omega_y, omega_z]
-            acceleration: [0, 0, 0] // 加速度 [a_x, a_y, a_z]
+            acceleration: [0, 0, 0], // 加速度 [a_x, a_y, a_z]
+            position: [0, 0, 0],
+            velocity: [0, 0, 0]
         };
+        this.kf = new KalmanFilter();
         const handleDeviceOrientation = ( event ) =>
         {
             // axis orientation assumes device is placed on ground, screen upward
@@ -339,51 +321,41 @@ class IMU
             let az = event.acceleration.z; // (m/s^2)
 
             this.GX = gx; this.GY = gy; this.GZ = gz;
-            this.accelerations.push(ax); this.accelerations.push(ay); this.accelerations.push(az);
-            const lengthToKeep = 5;
-            while (this.accelerations.length > lengthToKeep * 3) {
-                this.accelerations.shift();
-            }
-            this.AX = ax; this.AY = ay; this.AZ = az;
             
+            const lengthToKeep = 5;
+            
+            this.AX = ax; this.AY = ay; this.AZ = az;
+            this.angularVelocity = [gx, gy, gz];
+            this.acceleration = [ax, ay, az];
             // 逐个字段赋值
-            this.imuData.quaternion[0] = this.q.x; // q_x
-            this.imuData.quaternion[1] = this.q.y; // q_y
-            this.imuData.quaternion[2] = this.q.z; // q_z
-            this.imuData.quaternion[3] = this.q.w; // q_w
+            this.imuData.quaternion = [this.q.x, this.q.y, this.q.z, this.q.w];
+            this.imuData.angularVelocity = [...this.angularVelocity];
+            this.imuData.acceleration = [...this.acceleration];
 
-            this.imuData.angularVelocity[0] = gx; // omega_x
-            this.imuData.angularVelocity[1] = gy; // omega_y
-            this.imuData.angularVelocity[2] = gz; // omega_z
+            this.prevState = JSON.parse(JSON.stringify(this.KFimuData));
+            const timestamp = Date.now();
+            this.timestamps[0] = this.timestamps[1];
+            this.timestamps[1] = timestamp;
+            this.mill_timestamp = timestamp;
+            let dt = (this.timestamps[1] - this.timestamps[0]) / 1000;
+            if (dt > 0) {
+                this.kf.predict(dt);
+                console.log("Before update:", this.kf.state);
+                const measurement = [...this.imuData.quaternion, ...this.imuData.angularVelocity, ...this.imuData.acceleration];
+                this.kf.update(measurement);
+                console.log("After update:", this.kf.state);
 
-            this.imuData.acceleration[0] = ax; // a_x
-            this.imuData.acceleration[1] = ay; // a_y
-            this.imuData.acceleration[2] = az; // a_z
+                const updatedQuaternion = this.integrateQuaternion(this.prevState.quaternion, this.prevState.angularVelocity, dt);
+                const newVelocity = this.prevState.velocity.map((v, i) => v + this.prevState.acceleration[i] * dt);
+                const newPosition = this.prevState.position.map((p, i) => p + this.prevState.velocity[i] * dt + 0.5 * this.prevState.acceleration[i] * dt * dt);
 
-            const kf = new KalmanFilter();
-            // 将IMU数据转换为状态向量
-            const measurement = [
-                ...this.imuData.quaternion,
-                ...this.imuData.angularVelocity,
-                ...this.imuData.acceleration
-            ];
-
-            // 预测和更新
-            kf.predict();
-            kf.update(measurement);
-            [this.q.x, this.q.y, this.q.z, this.q.w, gx, gy, gz, ax, ay, az] = kf.state;
-            this.KFimuData.quaternion[0] = this.q.x; // q_x
-            this.KFimuData.quaternion[1] = this.q.y; // q_y
-            this.KFimuData.quaternion[2] = this.q.z; // q_z
-            this.KFimuData.quaternion[3] = this.q.w; // q_w
-
-            this.KFimuData.angularVelocity[0] = gx; // omega_x
-            this.KFimuData.angularVelocity[1] = gy; // omega_y
-            this.KFimuData.angularVelocity[2] = gz; // omega_z
-
-            this.KFimuData.acceleration[0] = ax; // a_x
-            this.KFimuData.acceleration[1] = ay; // a_y
-            this.KFimuData.acceleration[2] = az; // a_z
+                [this.q.x, this.q.y, this.q.z, this.q.w, gx, gy, gz, ax, ay, az] = this.kf.state;
+                this.KFimuData.quaternion = updatedQuaternion;
+                this.KFimuData.angularVelocity = [gx, gy, gz];
+                this.KFimuData.acceleration = [ax, ay, az];
+                this.KFimuData.velocity = newVelocity;
+                this.KFimuData.position = newPosition;
+            }
 /*
             console.log('alpha: ' + gz);
             console.log('beta: ' + gx);
@@ -393,8 +365,7 @@ class IMU
             console.log('ay: ' + ay);
             console.log('az: ' + az);
 */
-            const timestamp = Date.now();
-            this.timestamp = timestamp;
+
         };
 
 
@@ -421,6 +392,18 @@ class IMU
         window.addEventListener( 'orientationchange', handleScreenOrientation.bind( this ), false );
     }
 
+    integrateQuaternion(q, omega, dt) {
+        const wx = omega[0] * dt / 2;
+        const wy = omega[1] * dt / 2;
+        const wz = omega[2] * dt / 2;
+
+        return [
+            q[0] + wx * q[3] + wy * q[2] - wz * q[1],
+            q[1] - wx * q[2] + wy * q[3] + wz * q[0],
+            q[2] + wx * q[1] - wy * q[0] + wz * q[3],
+            q[3] - wx * q[0] - wy * q[1] - wz * q[2]
+        ];
+    }
     clear()
     {
         this.motion.length = 0;
