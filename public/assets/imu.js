@@ -286,11 +286,7 @@ class IMU
 
         this.screenOrientation = null;
         this.screenOrientationAngle = 0;
-
-        this.motion = [];
-        this.timestamps = [];
-        this.tsm = [];
-        this.poseStore = [0, 0, 0, 0];
+        this.timestamp = Date.now();
         this.q = { x: 0, y: 0, z: 0, w: 1 };
         this.X = this.Y = this.Z = 0;
         this.GX = this.GY = this.GZ = 0;
@@ -398,15 +394,7 @@ class IMU
             console.log('az: ' + az);
 */
             const timestamp = Date.now();
-            this.motion.push({ timestamp, gx, gy, gz, ax, ay, az });
-
-            // 添加新的时间戳
-            this.timestamps.push( timestamp );
-            // 保留最新的5个时间戳及其数据
-            if (this.timestamps.length > lengthToKeep) {
-                // 移除最旧的时间戳
-                this.timestamps.shift();
-            }
+            this.timestamp = timestamp;
         };
 
 
