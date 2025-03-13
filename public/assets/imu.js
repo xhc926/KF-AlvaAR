@@ -260,8 +260,6 @@ class IMU
         this.velocity = [0, 0, 0]; // vx, vy, vz
         this.q = { x: 0, y: 0, z: 0, w: 1 };
         this.X = this.Y = this.Z = 0;
-        this.GX = this.GY = this.GZ = 0;
-        this.AX = this.AY = this.AZ = 0;
         this.acceleration = [0, 0, 0];
         this.angularVelocity = [0, 0, 0];
         this.prevState = {
@@ -295,12 +293,7 @@ class IMU
             const x = event.beta * deg2rad;    // X-axis (β) vertical tilt
             const y = event.gamma * deg2rad;   // Y-axis (γ) horizontal tilt
             const z = event.alpha * deg2rad;   // Z-axis (α) compass direction
-            this.X = x; this.Y = y; this.Z = z;
-/*
-            console.log('x: ' + x); //new added output
-            console.log('y: ' + y);
-            console.log('z: ' + z);
-*/
+
             this.q = Quaternion.fromEuler(x, y, z, 'ZXY');
             const orientation = Quaternion.multiply(this.worldTransform, this.q);
 
@@ -320,14 +313,9 @@ class IMU
             let ay = event.acceleration.y; // (m/s^2)
             let az = event.acceleration.z; // (m/s^2)
 
-            this.GX = gx; this.GY = gy; this.GZ = gz;
-            
-            const lengthToKeep = 5;
-            
-            this.AX = ax; this.AY = ay; this.AZ = az;
             this.angularVelocity = [gx, gy, gz];
             this.acceleration = [ax, ay, az];
-            // 逐个字段赋值
+            
             this.imuData.quaternion = [this.q.x, this.q.y, this.q.z, this.q.w];
             this.imuData.angularVelocity = [...this.angularVelocity];
             this.imuData.acceleration = [...this.acceleration];
@@ -356,16 +344,6 @@ class IMU
                 this.KFimuData.velocity = newVelocity;
                 this.KFimuData.position = newPosition;
             }
-/*
-            console.log('alpha: ' + gz);
-            console.log('beta: ' + gx);
-            console.log('gamma: ' + gy);
-            
-            console.log('ax: ' + ax); //new added output
-            console.log('ay: ' + ay);
-            console.log('az: ' + az);
-*/
-
         };
 
 
