@@ -22,19 +22,24 @@ graph TD
 #### 1. 状态空间模型
 
 本系统采用10维状态向量：
-$$
+
+```math
 \mathbf{x} = \begin{bmatrix}
 q_w & q_x & q_y & q_z & \omega_x & \omega_y & \omega_z & a_x & a_y & a_z
 \end{bmatrix}^T
-$$
+```
+
 状态方程：
-$$
+
+```math
 \mathbf{x}_{k} = \mathbf{F}_k\mathbf{x}_{k-1} + \mathbf{w}_k
-$$
+```
+
 观测方程：
-$$
+
+```math
 \mathbf{z}_k = \mathbf{H}_k\mathbf{x}_k + \mathbf{v}_k
-$$
+```
 
 #### 2. 代码对应实现
 
@@ -55,9 +60,10 @@ getStateTransitionMatrix(dt) {
 
 #### 1. 状态预测
 
-$$
+```math
 \hat{\mathbf{x}}^-_k = \mathbf{F}_k\hat{\mathbf{x}}_{k-1}
-$$
+```
+
 对应代码实现：
 
 ```js
@@ -66,9 +72,10 @@ this.state = this.multiplyMatrices(F, this.state.map(val => [val])).map(row => r
 
 #### 2. 协方差预测
 
-$$
+```math
 \mathbf{P}^-_k = \mathbf{F}_k\mathbf{P}_{k-1}\mathbf{F}_k^T + \mathbf{Q}_k
-$$
+```
+
 对应代码实现：
 
 ```js
@@ -79,13 +86,14 @@ this.covariance = this.addMatrices(FPF_T, this.processNoise);
 
 #### 3. 过程噪声矩阵
 
-$$
+```math
 \mathbf{Q} = \begin{bmatrix}
 q_{quat} & 0 & 0 \\
 0 & q_{gyro} & 0 \\
 0 & 0 & q_{accel}
 \end{bmatrix}, \quad q = 0.01 \cdot \Delta t
-$$
+```
+
 对应代码实现：
 
 ```js
@@ -100,9 +108,10 @@ getProcessNoiseMatrix(dt) {
 
 #### 1. 卡尔曼增益计算
 
-$$
+```math
 \mathbf{K}_k = \mathbf{P}^-_k\mathbf{H}^T(\mathbf{H}\mathbf{P}^-_k\mathbf{H}^T + \mathbf{R})^{-1}
-$$
+```
+
 对应代码实现：
 
 ```js
@@ -118,9 +127,10 @@ const K = this.multiplyMatrices(
 
 #### 2. 状态更新
 
-$$
+```math
 \hat{\mathbf{x}}_k = \hat{\mathbf{x}}^-_k + \mathbf{K}_k(\mathbf{z}_k - \mathbf{H}\hat{\mathbf{x}}^-_k)
-$$
+```
+
 对应代码实现：
 
 ```js
@@ -131,9 +141,10 @@ this.state = this.state.map((val, i) => val + K_innovation[i][0]);
 
 #### 3. 协方差更新
 
-$$
+```math
 \mathbf{P}_k = (\mathbf{I} - \mathbf{K}_k\mathbf{H})\mathbf{P}^-_k
-$$
+```
+
 对应代码实现：
 
 ```js
@@ -148,18 +159,22 @@ this.covariance = this.multiplyMatrices(I_KH, this.covariance);
 #### 1. 四元数积分推导
 
 采用一阶龙格-库塔法进行四元数更新：
-$$
+
+```math
 \mathbf{q}_{k+1} = \mathbf{q}_k + \frac{\Delta t}{2}\mathbf{\Omega}(\omega)\mathbf{q}_k
-$$
+```
+
 其中：
-$$
+
+```math
 \mathbf{\Omega}(\omega) = \begin{bmatrix}
 0 & -\omega_x & -\omega_y & -\omega_z \\
 \omega_x & 0 & \omega_z & -\omega_y \\
 \omega_y & -\omega_z & 0 & \omega_x \\
 \omega_z & \omega_y & -\omega_x & 0
 \end{bmatrix}
-$$
+```
+
 对应代码实现：
 
 ```js
@@ -180,12 +195,15 @@ integrateQuaternion(q, omega, dt) {
 #### 2. 运动学方程
 
 位置和速度更新采用经典运动学方程：
-$$
+
+```math
 \mathbf{v}_k = \mathbf{v}_{k-1} + \mathbf{a}_{k-1}\Delta t
-$$
-$$
+```
+
+```math
 \mathbf{p}_k = \mathbf{p}_{k-1} + \mathbf{v}_{k-1}\Delta t + \frac{1}{2}\mathbf{a}_{k-1}(\Delta t)^2
-$$
+```
+
 对应代码实现：
 
 ```js
